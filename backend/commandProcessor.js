@@ -83,11 +83,20 @@ export async function processCommand(command) {
   for (const [key, cmd] of Object.entries(appMap)) {
     if (command === key || command === `open ${key}` || command === `start ${key}` || command === `run ${key}`) {
       try {
-        const finalCmd = cmd.startsWith('start') ? `cmd /c ${cmd}` : cmd;
-        await execPromise(finalCmd);
-        return { status: 'success', message: `Successfully launched ${key}` };
+        // RADICAL SYSTEM DISPATCH: Detached execution to avoid blocking the Humanoid Brain
+        const finalCmd = cmd.startsWith('start') ? cmd : `start ${cmd}`;
+        console.log(`[Nextbot System]: Launching Matrix Node -> ${finalCmd}`);
+        
+        exec(`cmd /c "${finalCmd}"`, (err) => {
+          if (err) console.error(`[Matrix Link Error] ${key}:`, err);
+        });
+
+        return { 
+          status: 'success', 
+          message: `Cognitive Link Established: Successfully localized and launched ${key}. Neural lattice remains active.` 
+        };
       } catch (err) {
-        return { status: 'error', message: `Failed to open ${key}` };
+        return { status: 'error', message: `Cognitive Link Interrupted: Failed to open ${key}. Energy Levels insufficient.` };
       }
     }
   }

@@ -31,11 +31,12 @@ app.use(limiter);
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/nextbot';
 mongoose.connect(MONGO_URI)
   .then(() => {
-    console.log('\x1b[36m%s\x1b[0m', ' 🧠 NEXTBOT MEMORY: CLOUD CONNECTED');
-    Log.create({ level: 'info', message: 'Database Connected Successfully' });
+    console.log('\x1b[36m%s\x1b[0m', ' NEXTBOT MEMORY: CLOUD CONNECTED');
+    safeLog({ level: 'info', message: 'Database Connected Successfully' });
   })
   .catch(err => {
-    console.error('\x1b[31m%s\x1b[0m', ' ❌ CLOUD MEMORY ERROR:', err.message);
+    console.error('\x1b[31m%s\x1b[0m', ' CLOUD MEMORY WARNING: Database Offline. Running in Local Mode.');
+    console.error(`Reason: ${err.message}`);
   });
 
 // --- Schemas ---
@@ -98,6 +99,18 @@ const Reminder = mongoose.model('Reminder', reminderSchema);
 const Task = mongoose.model('Task', taskSchema);
 
 // --- Helpers ---
+const safeLog = async (data) => {
+  try {
+    if (mongoose.connection.readyState === 1) {
+      await Log.create(data);
+    } else {
+      console.log(`[Nextbot Internal Log]: ${data.message}`);
+    }
+  } catch (e) {
+    console.warn("[Log Sync Failed]");
+  }
+};
+
 const verifyToken = (req, res, next) => {
   const token = req.headers['authorization'];
   if (!token) return res.status(403).json({ error: 'No token provided' });
@@ -191,7 +204,7 @@ app.post('/api/login/face', async (req, res) => {
 });
 
 // 4. Advanced Command Execution (Local System Interaction)
-app.post('/command', async (req, res) => {
+app.post('/api/command', async (req, res) => {
   const { command } = req.body;
   
   try {
@@ -199,15 +212,15 @@ app.post('/command', async (req, res) => {
     
     // Log intent/action
     if (result.status === 'success') {
-      Log.create({ level: 'info', message: `Command: ${command}`, metadata: { result: result.message } });
+      safeLog({ level: 'info', message: `Command: ${command}`, metadata: { result: result.message } });
     } else {
-      Log.create({ level: 'warn', message: `Command Unhandled: ${command}` });
+      safeLog({ level: 'warn', message: `Command Unhandled: ${command}` });
     }
 
     res.json(result);
   } catch (error) {
     console.error(`[Processor Error]: ${error}`);
-    Log.create({ level: 'error', message: `Command failed: ${command}`, metadata: { error: error.toString() } });
+    safeLog({ level: 'error', message: `Command failed: ${command}`, metadata: { error: error.toString() } });
     res.status(500).json({ status: 'error', message: error.message });
   }
 });
@@ -287,7 +300,7 @@ app.delete('/api/tasks', verifyToken, async (req, res) => {
 // --- Start Server ---
 app.listen(PORT, () => {
   console.log('-------------------------------------------');
-  console.log('\x1b[35m%s\x1b[0m', ' 🚀 NEXTBOT UNBRIDGED SERVER LIVE');
+  console.log('\x1b[35m%s\x1b[0m', ' NEXTBOT UNBRIDGED SERVER LIVE');
   console.log('\x1b[2m%s\x1b[0m', ` > Endpoint: http://localhost:${PORT}`);
   console.log('-------------------------------------------');
 });
