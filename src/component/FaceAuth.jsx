@@ -16,21 +16,34 @@ const FaceAuth = ({ onAuthenticated, mode = 'login' }) => {
     // Load Models on Mount
     useEffect(() => {
         const loadModels = async () => {
+            const LOCAL_URL = '/models/';
+            const CDN_URL = 'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights/';
+
+            const tryLoad = async (url, sourceName) => {
+                console.log(`[Nextbot Vision] Attempting to load models from ${sourceName}: ${url}`);
+                await faceapi.nets.tinyFaceDetector.loadFromUri(url);
+                await faceapi.nets.faceLandmark68Net.loadFromUri(url);
+                await faceapi.nets.faceRecognitionNet.loadFromUri(url);
+                return true;
+            };
+
             try {
-                // Determine absolute URL for reliable sensory loading
-                const MODEL_URL = window.location.origin + '/models'
-                console.log("[Nextbot Scan]: Loading Vision Assets from:", MODEL_URL);
-                
-                await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL)
-                await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL)
-                await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
-                
-                setStatus('Sensory Matrix Loaded. Calibrating Camera...')
-                startVideo()
-            } catch (e) {
-                console.error("[Nextbot Vision Critical]: Model load failure:", e)
-                setError('Failed to load Face AI models. check /public/models')
-                setIsLoading(false)
+                // First attempt: Local files
+                await tryLoad(LOCAL_URL, "Local Repository");
+                setStatus('Sensory Matrix Loaded (Local). Calibrating...');
+                startVideo();
+            } catch (localError) {
+                console.warn("[Nextbot Vision] Local models corrupted or missing. Activating CDN Fallback...", localError);
+                try {
+                    // Second attempt: Global CDN
+                    await tryLoad(CDN_URL, "Global CDN");
+                    setStatus('Sensory Matrix Loaded (CDN). Calibrating...');
+                    startVideo();
+                } catch (cdnError) {
+                    console.error("[Nextbot Vision Critical]: All model sources failed.", cdnError);
+                    setError(`Failed to load Face AI models. Please check your internet connection or ensure 'public/models' contains valid files.`);
+                    setIsLoading(false);
+                }
             }
         }
         loadModels()
@@ -60,53 +73,55 @@ const FaceAuth = ({ onAuthenticated, mode = 'login' }) => {
     }
 
     const handleVideoPlay = () => {
-        setIsLoading(false)
-        setStatus('Scanning...')
+        setIsLoading(false);
+        setStatus('Ready');
 
         intervalRef.current = setInterval(async () => {
-            if (!videoRef.current || !canvasRef.current) return
+            if (!videoRef.current || !canvasRef.current) return;
 
-            // Detection
+            // 1. Lightweight Detection (Just check if face is there)
             const detections = await faceapi.detectAllFaces(
                 videoRef.current,
                 new faceapi.TinyFaceDetectorOptions()
-            ).withFaceLandmarks().withFaceDescriptors()
+            );
 
-            // Clear canvas
-            const canvas = canvasRef.current
-            const displaySize = { width: videoRef.current.videoWidth, height: videoRef.current.videoHeight }
-            faceapi.matchDimensions(canvas, displaySize)
-
-            const resizedDetections = faceapi.resizeResults(detections, displaySize)
-            canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height)
-
-            // Draw box
-            faceapi.draw.drawDetections(canvas, resizedDetections)
+            // 2. Fast UI Feedback
+            const canvas = canvasRef.current;
+            const displaySize = { width: videoRef.current.videoWidth, height: videoRef.current.videoHeight };
+            faceapi.matchDimensions(canvas, displaySize);
+            const resizedDetections = faceapi.resizeResults(detections, displaySize);
+            canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+            faceapi.draw.drawDetections(canvas, resizedDetections);
 
             if (detections.length > 0) {
-                const descriptor = detections[0].descriptor
+                setStatus('Processing Face...');
+                
+                // 3. Conditional High-Performance Processing
+                const fullDetections = await faceapi.detectAllFaces(
+                    videoRef.current, 
+                    new faceapi.TinyFaceDetectorOptions()
+                ).withFaceLandmarks().withFaceDescriptors();
 
-                // Mode: Login
-                if (mode === 'login') {
-                    // Critical: Await the cloud verification (Phase 5 & 8)
-                    const result = await verifyFace(descriptor)
-                    if (result.success) {
-                        setStatus('User Verified! Access Granted.')
-                        stopVideo()
-                        onAuthenticated && onAuthenticated()
-                    } else {
-                        setStatus('Biometric Lock: Face not recognized.')
+                if (fullDetections.length > 0) {
+                    const descriptor = fullDetections[0].descriptor;
+
+                    if (mode === 'login') {
+                        const result = await verifyFace(descriptor);
+                        if (result.success) {
+                            setStatus('Access Granted!');
+                            stopVideo();
+                            onAuthenticated && onAuthenticated();
+                        } else {
+                            setStatus('Unauthorized. Retrying...');
+                        }
+                    } else if (mode === 'register') {
+                        setStatus('Face Aligned. Ready to Register.');
                     }
                 }
-
-                // Mode: Register (Only if logged in user is available in context? Or passed as prop?)
-                if (mode === 'register') {
-                    // Just auto register the first face seen? Or wait for click?
-                    // Let's prevent auto-register loop. Waiting for parent action or button might be better.
-                    setStatus('Face Detected. Ready to Register.')
-                }
+            } else {
+                setStatus('Scanning...');
             }
-        }, 500)
+        }, 150);
     }
 
     const handleRegisterClick = async () => {
