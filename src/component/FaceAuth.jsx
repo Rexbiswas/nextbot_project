@@ -17,17 +17,19 @@ const FaceAuth = ({ onAuthenticated, mode = 'login' }) => {
     useEffect(() => {
         const loadModels = async () => {
             try {
-                const MODEL_URL = '/models'
-                await Promise.all([
-                    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-                    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-                    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
-                ])
-                setStatus('Models Loaded. Starting Camera...')
+                // Determine absolute URL for reliable sensory loading
+                const MODEL_URL = window.location.origin + '/models'
+                console.log("[Nextbot Scan]: Loading Vision Assets from:", MODEL_URL);
+                
+                await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL)
+                await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL)
+                await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+                
+                setStatus('Sensory Matrix Loaded. Calibrating Camera...')
                 startVideo()
             } catch (e) {
-                console.error("Model Load Error:", e)
-                setError('Failed to load Face AI models.')
+                console.error("[Nextbot Vision Critical]: Model load failure:", e)
+                setError('Failed to load Face AI models. check /public/models')
                 setIsLoading(false)
             }
         }
@@ -86,11 +88,14 @@ const FaceAuth = ({ onAuthenticated, mode = 'login' }) => {
 
                 // Mode: Login
                 if (mode === 'login') {
-                    const result = verifyFace(descriptor)
+                    // Critical: Await the cloud verification (Phase 5 & 8)
+                    const result = await verifyFace(descriptor)
                     if (result.success) {
-                        setStatus('User Verified! Unlocking...')
+                        setStatus('User Verified! Access Granted.')
                         stopVideo()
                         onAuthenticated && onAuthenticated()
+                    } else {
+                        setStatus('Biometric Lock: Face not recognized.')
                     }
                 }
 

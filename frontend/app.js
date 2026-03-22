@@ -277,9 +277,12 @@
     }
 
     // Local Pattern Matcher (Fallback if bridge fails)
+    const sysKeywords = ['screenshot', 'volume', 'shutdown', 'restart', 'mute', 'play', 'pause', 'stop', 'battery', 'cpu', 'memory', 'wifi', 'camera'];
     const openMatch = text.match(/(?:open|launch|run|start)\s+(.+)/i);
-    if (openMatch) {
-       const what = openMatch[1].trim().toLowerCase();
+    const isSys = sysKeywords.some(k => text.toLowerCase().includes(k));
+
+    if (openMatch || isSys) {
+       const what = openMatch ? openMatch[1].trim().toLowerCase() : text.toLowerCase();
        // First try desktop bridge
        try {
          const response = await fetch('/command', {
@@ -298,7 +301,7 @@
        if (what.includes('word')) window.open('https://office.live.com/start/Word.aspx');
        else if (what.includes('excel')) window.open('https://office.live.com/start/Excel.aspx');
        else window.open(`https://www.google.com/search?q=${encodeURIComponent(what)}`, '_blank');
-       jarvisSpeak(`Opening search for: ${what}`);
+       jarvisSpeak(`Launching search fallback: ${what}`);
        return;
     }
   }

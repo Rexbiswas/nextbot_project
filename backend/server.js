@@ -49,6 +49,11 @@ const userSchema = new mongoose.Schema({
     voiceVolume: { type: Number, default: 1 },
     language: { type: String, default: 'en-US' }
   },
+  memory: {
+    lastCommands: { type: [String], default: [] },
+    favoriteFolders: { type: [String], default: [] },
+    context: { type: Object, default: {} }
+  },
   faceDescriptor: { type: [Number], default: [] },
   createdAt: { type: Date, default: Date.now }
 });

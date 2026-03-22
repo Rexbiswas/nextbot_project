@@ -49,12 +49,13 @@ const interpretCommandWithAI = async (text, profile) => {
               TASK: Analyze the input and return a JSON object with the detected intent.
               
               INTENTS:
-              1. OPEN_APP: Launch an application.
+              1. OPEN_APP: Launch/Start an application or run a system command.
                  - {"type": "OPEN_APP", "params": {"appName": "exact_app_name"}}
-                 - Mobile Examples: whatsapp, instagram, camera, settings, maps.
-                 - Desktop Examples: notepad, excel, word, browser, terminal.
+                 - System Command Examples: screenshot, volume up, shutdown, camera.
+                 - Desktop Examples: notepad, excel, vs code, chrome.
+                 - Mobile Examples: whatsapp, instagram, camera, settings.
               
-              2. SEARCH: Google search.
+              2. SEARCH: Google search queries.
                  - {"type": "SEARCH", "params": {"query": "search terms"}}
               
               3. SYSTEM_CONTROL: Hardware control.
@@ -88,6 +89,12 @@ const interpretCommandWithAI = async (text, profile) => {
   const openMatch = lower.match(/(?:open|launch|run|start)\s+(.+)/i);
   if (openMatch) {
     return { type: 'OPEN_APP', params: { appName: openMatch[1].trim() } };
+  }
+
+  // System Control keywords (to be passed to desktop bridge)
+  const sysKeywords = ['screenshot', 'volume', 'shutdown', 'restart', 'mute', 'play', 'pause', 'stop', 'battery', 'cpu', 'memory', 'wifi', 'camera'];
+  if (sysKeywords.some(k => lower.includes(k))) {
+    return { type: 'OPEN_APP', params: { appName: text } }; // Pass full phrase to bridge
   }
 
   // Common
@@ -158,6 +165,7 @@ const REM_KEY = 'nextbot_reminders'
 const TODO_KEY = 'nextbot_todos'
 
 export function useAssistant() {
+  const [isWakeWordEnabled, setIsWakeWordEnabled] = useState(true)
   const [messages, setMessages] = useState([])
   const [reminders, setReminders] = useState([])
   const [tasks, setTasks] = useState([])
@@ -171,6 +179,7 @@ export function useAssistant() {
 
   // Get content based on language
   const content = NEXTBOT.content[currentLang] || NEXTBOT.content['EN']
+  const WAKE_WORD = "nextbot"
 
   // --- API Sync ---
   const API_BASE = '/api'
@@ -274,8 +283,25 @@ export function useAssistant() {
   }, [getCurrentUser, currentLang])
 
   const addMessage = useCallback((text, who = 'bot', typing = false) => {
-    setMessages(prev => [...prev, { text, who, typing }])
-  }, [])
+    const newMsg = { text, who, typing, timestamp: new Date() }
+    setMessages(prev => [...prev, newMsg])
+
+    // Sync to Cloud Memory if logged in
+    const token = localStorage.getItem('token')
+    if (token) {
+        fetch(`${API_BASE}/conversation`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ 
+                platform: isMobile ? 'mobile' : 'desktop',
+                messages: [{ role: who, content: text }] 
+            })
+        }).catch(err => console.warn("[Memory Sync Error]:", err))
+    }
+  }, [API_BASE, isMobile])
 
   const scheduleReminder = useCallback((reminder) => {
     const id = reminder._id
@@ -310,18 +336,53 @@ export function useAssistant() {
   */
   const processCommand = useCallback(async (text) => {
     const rawText = text
-    text = text.trim()
+    const system = getSystemProfile()
+    let lower = text.toLowerCase().trim()
+
+    // --- WAKE WORD ACTIVATION ---
+    const hasWakeWord = lower.includes(WAKE_WORD)
+    
+    // If wake word is enabled, and not triggered by wake word, and not a follow-up, ignore
+    // A follow-up is considered if there's already a conversation (messages.length > 1)
+    if (isWakeWordEnabled && !hasWakeWord && messages.length > 1) {
+       console.log("[Nextbot] Ignoring ambient noise (no wake word found)");
+       return;
+    }
+
+    // Strip wake word from processing
+    let processedText = lower
+    if (hasWakeWord) {
+      processedText = lower.replace(new RegExp(`.*${WAKE_WORD}`, 'i'), '').trim()
+    }
+    
+    if (!processedText && hasWakeWord) {
+        const greeting = "Nextbot listening. How can I help?"
+        speak(greeting)
+        addMessage(greeting, 'bot', true)
+        return
+    }
+
+    // If we have text after the wake word, use that! Otherwise, use the original lowercased text.
+    text = processedText || lower
     addMessage(rawText, 'user')
 
-    const system = getSystemProfile()
-
     // Quick Local Filters (Latency Optimization)
+    lower = text.toLowerCase().trim() // Re-assign lower with the potentially processed text
+
     // 1. Greetings
     if (/^(hi|hello|hey|good morning|hola|bonjour)/i.test(text)) {
       const greeting = content.greetings[Math.floor(Math.random() * content.greetings.length)]
       speak(greeting)
       addMessage(greeting, 'bot', true)
       return
+    }
+
+    // 2. Hardware/System Intercept (Priority bypass for AI)
+    const sysKeywords = ['screenshot', 'volume', 'shutdown', 'restart', 'mute', 'play', 'pause', 'stop', 'battery', 'cpu', 'memory', 'wifi', 'camera'];
+    if (sysKeywords.some(k => lower.includes(k))) {
+       console.log("[Nextbot] System intercept detected:", text);
+       handleAppOpen(text, system);
+       return;
     }
 
     // 2. AI / Smart Interpretation
@@ -488,8 +549,9 @@ export function useAssistant() {
         shouldListenRef.current = false
         setIsListening(false)
         setError('Microphone access denied. Please allow microphone permissions.')
-      } else if (event.error === 'no-speech') {
-        // Ignore, just keep listening (or let it restart via onend if continuous is tricky)
+      } else if (event.error === 'no-speech' || event.error === 'aborted') {
+        // Silently ignore these as they are common side-effects of browser behavior or silence
+        console.warn(`[Speech] Silenced common error: ${event.error}`)
       } else {
         setError(`Speech recognition error: ${event.error}`)
       }
@@ -498,12 +560,14 @@ export function useAssistant() {
     recognition.onend = () => {
       // If we are supposed to be listening, restart!
       if (shouldListenRef.current) {
-        try {
-          recognition.start()
-        } catch (e) {
-          console.error("Failed to restart recognition", e)
-          setIsListening(false)
-        }
+        // Small delay to prevent rapid-fire restart "aborted" errors
+        setTimeout(() => {
+          try {
+            recognition.start()
+          } catch (e) {
+            // If already started, this will catch and ignore
+          }
+        }, 300)
       } else {
         setIsListening(false)
       }
@@ -550,26 +614,55 @@ export function useAssistant() {
       window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices()
     }
 
-    // Auto-speak on load (User Request)
-    // Note: This might be blocked by browser autoplay policies if no interaction has occurred.
+    // Fetch History if available from Cloud Memory
+    const token = localStorage.getItem('token')
+    if (token) {
+      console.log("[Nextbot] Re-syncing with Cloud Memory...");
+      fetch(`${API_BASE}/history`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.length > 0) {
+           const history = data.flatMap(c => c.messages.map(m => ({ 
+             text: m.content, 
+             who: m.role, 
+             timestamp: m.timestamp 
+           }))).slice(-10)
+           if (history.length > 0) setMessages(history)
+        }
+      }).catch(e => console.warn("[Memory Sync Error]:", e))
+    }
+
     const greeting = content.greetings[0]
     speak(greeting)
     addMessage(greeting, 'bot', true)
 
-    // Auto-start listening
-    try {
-      if (window.SpeechRecognition || window.webkitSpeechRecognition) {
-        shouldListenRef.current = true
-        recognitionRef.current?.start()
-        setIsListening(true)
-        setError(null)
-      } else {
-        setError('Browser does not support Speech Recognition.')
+    shouldListenRef.current = false
+  }, [addMessage, speak, content, API_BASE])
+
+  // Listener for manual start (from Overlay/etc)
+  useEffect(() => {
+    const onStartCommand = () => {
+      console.log("[Nextbot] Start command received. Activating...");
+      if (recognitionRef.current && !isListening) {
+        try {
+          shouldListenRef.current = true
+          recognitionRef.current.start()
+          setIsListening(true)
+          setError(null)
+          // Speak initial greeting only after activation
+          const greeting = content.greetings[0]
+          speak(greeting)
+          addMessage(greeting, 'bot', true)
+        } catch (e) {
+          console.warn("[Nextbot] Manual start attempt blocked or already started:", e)
+        }
       }
-    } catch (e) {
-      console.error("Auto-start failed:", e)
-    }
-  }, [addMessage, speak, content])
+    };
+    window.addEventListener('start-nextbot', onStartCommand);
+    return () => window.removeEventListener('start-nextbot', onStartCommand);
+  }, [isListening, content, speak, addMessage])
 
   const handleSubmit = useCallback(() => {
     if (!inputValue.trim()) return

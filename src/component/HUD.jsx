@@ -383,12 +383,7 @@ const HUD = () => {
             {/* Bottom Center */}
             <LetsTalkButton />
 
-            {/* Background Grid Lines (Decorative) */}
-            <div className="absolute inset-0 pointer-events-none opacity-10">
-                <div className="absolute top-0 left-[20%] w-[1px] h-full bg-cyan-500"></div>
-                <div className="absolute top-0 right-[20%] w-[1px] h-full bg-cyan-500"></div>
-                <div className="absolute top-[50%] left-0 w-full h-[1px] bg-cyan-500"></div>
-            </div>
+            {/* Background Decorations Disabled for Clarity */}
         </div>
     )
 }

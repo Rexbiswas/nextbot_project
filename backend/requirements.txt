@@ -1,0 +1,10 @@
+opencv-python
+pyautogui
+pyttsx3
+numpy
+Pillow
+mediapipe
+face_recognition
+face_data
+face_detection
+face_landmarks
