@@ -1,67 +1,25 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 
 const AuthContext = createContext(null)
-
-const USERS_KEY = 'nextbot_users'
 const SESSION_KEY = 'nextbot_session'
-
-const hash = (p) => btoa(p) // demo-only
+const API_BASE = 'http://localhost:3002/api'
 
 export function AuthProvider({ children }) {
-  const [users, setUsers] = useState({})
   const [session, setSession] = useState(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Load users
-    let currentUsers = {};
-    try {
-      const u = localStorage.getItem(USERS_KEY)
-      if (u) {
-        currentUsers = JSON.parse(u);
-        setUsers(currentUsers);
-      }
-    } catch (e) {
-      console.error('Failed to load users', e)
-      setUsers({})
-    }
-
-    // Load session
     try {
       const s = localStorage.getItem(SESSION_KEY)
       if (s) setSession(JSON.parse(s))
     } catch (e) {
       console.error('Failed to load session', e)
-      setSession(null)
-    }
-
-    // Create default admin if none exist
-    if (!currentUsers || Object.keys(currentUsers).length === 0) {
-      const newUsers = {
-        admin: {
-          username: 'admin',
-          password: hash('admin123'),
-          settings: {
-            voiceRate: 1,
-            voicePitch: 1,
-            voiceVolume: 1,
-            preferredVoice: '',
-            language: 'en-US',
-            theme: 'light',
-          },
-          created: Date.now()
-        }
-      };
-      localStorage.setItem(USERS_KEY, JSON.stringify(newUsers));
-      setUsers(newUsers);
+    } finally {
+      setLoading(false)
     }
   }, [])
 
-  const saveUsers = (usersData) => {
-    localStorage.setItem(USERS_KEY, JSON.stringify(usersData))
-    setUsers(usersData)
-  }
-
-  const saveSession = (sessionData) => {
+  const saveSession = useCallback((sessionData) => {
     if (sessionData) {
       localStorage.setItem(SESSION_KEY, JSON.stringify(sessionData))
       setSession(sessionData)
@@ -69,53 +27,39 @@ export function AuthProvider({ children }) {
       localStorage.removeItem(SESSION_KEY)
       setSession(null)
     }
+  }, [])
+
+  const register = async (username, password) => {
+    try {
+      const res = await fetch(`${API_BASE}/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      })
+      const data = await res.json()
+      if (res.ok) return { success: true, message: 'Registration successful' }
+      return { success: false, message: data.error || 'Registration failed' }
+    } catch (e) {
+      return { success: false, message: 'Server error during registration' }
+    }
   }
 
-  const register = (username, password, settings = {}) => {
-    if (!username || !password) {
-      return { success: false, message: 'Username and password required' }
-    }
-    if (users[username]) {
-      return { success: false, message: 'Username already exists' }
-    }
-
-    const newUsers = {
-      ...users,
-      [username]: {
-        username,
-        password: hash(password),
-        settings: {
-          voiceRate: 1,
-          voicePitch: 1,
-          voiceVolume: 1,
-          preferredVoice: '',
-          language: 'en-US',
-          theme: 'light',
-          ...settings
-        },
-        created: Date.now()
+  const login = async (username, password) => {
+    try {
+      const res = await fetch(`${API_BASE}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      })
+      const data = await res.json()
+      if (res.ok) {
+        saveSession(data)
+        return { success: true, message: 'Login successful' }
       }
+      return { success: false, message: data.error || 'Login failed' }
+    } catch (e) {
+      return { success: false, message: 'Server error during login' }
     }
-    saveUsers(newUsers)
-    return { success: true, message: 'Registration successful' }
-  }
-
-  const login = (username, password, skipPasswordCheck = false) => {
-    const user = users[username]
-    if (!user) {
-      return { success: false, message: 'Invalid credentials' }
-    }
-    if (!skipPasswordCheck && user.password !== hash(password)) {
-      return { success: false, message: 'Invalid credentials' }
-    }
-
-    const newSession = {
-      username: user.username,
-      settings: user.settings,
-      loginTime: Date.now()
-    }
-    saveSession(newSession)
-    return { success: true, message: 'Login successful', session: newSession }
   }
 
   const logout = () => {
@@ -123,85 +67,71 @@ export function AuthProvider({ children }) {
     return { success: true }
   }
 
-  const updateSettings = (username, newSettings) => {
-    if (!users[username]) {
-      return { success: false, message: 'User not found' }
-    }
-    const updatedUsers = {
-      ...users,
-      [username]: {
-        ...users[username],
-        settings: { ...users[username].settings, ...newSettings }
-      }
-    }
-    saveUsers(updatedUsers)
-
-    if (session?.username === username) {
-      saveSession({
-        ...session,
-        settings: updatedUsers[username].settings
+  const updateSettings = async (newSettings) => {
+    if (!session) return { success: false, message: 'Not logged in' }
+    try {
+      const res = await fetch(`${API_BASE}/user/settings`, {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.token}`
+        },
+        body: JSON.stringify(newSettings)
       })
-    }
-    return { success: true, settings: updatedUsers[username].settings }
-  }
-
-  const getSettings = (username) => {
-    return users[username]?.settings || null
-  }
-
-  // Face Auth Functions
-  const registerFace = (username, descriptor) => {
-    if (!users[username]) return { success: false, message: 'User not found' }
-
-    // Descriptor is a Float32Array, convert to array for storage
-    const descriptorArray = Array.from(descriptor)
-
-    const updatedUsers = {
-      ...users,
-      [username]: {
-        ...users[username],
-        faceDescriptor: descriptorArray
+      const data = await res.json()
+      if (res.ok) {
+        const updated = { ...session, settings: data }
+        saveSession(updated)
+        return { success: true, settings: data }
       }
+      return { success: false, message: 'Failed to update settings' }
+    } catch (e) {
+      return { success: false, message: 'Server error updating settings' }
     }
-    saveUsers(updatedUsers)
-    return { success: true, message: 'Face registered successfully' }
   }
 
-  const verifyFace = (descriptor) => {
-    // Simple Euclidean distance check
-    // In a real app with many users, use a labeled face descriptor matcher
+  const registerFace = async (descriptor) => {
+    if (!session) return { success: false, message: 'Not logged in' }
+    try {
+      const res = await fetch(`${API_BASE}/user/face`, {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.token}`
+        },
+        body: JSON.stringify({ descriptor: Array.from(descriptor) })
+      })
+      if (res.ok) return { success: true, message: 'Face data saved to cloud' }
+      return { success: false, message: 'Failed to save face data' }
+    } catch (e) {
+      return { success: false, message: 'Server error' }
+    }
+  }
 
-    let bestMatch = { username: null, distance: 1.0 }
-
-    Object.values(users).forEach(user => {
-      if (user.faceDescriptor) {
-        // Euclidean distance calculation
-        const storedDesc = user.faceDescriptor
-        const distance = Math.sqrt(
-          descriptor.reduce((sum, val, i) => sum + Math.pow(val - storedDesc[i], 2), 0)
-        )
-
-        if (distance < bestMatch.distance) {
-          bestMatch = { username: user.username, distance }
-        }
+  const verifyFace = async (descriptor) => {
+    try {
+      const res = await fetch(`${API_BASE}/login/face`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ descriptor: Array.from(descriptor) })
+      })
+      const data = await res.json()
+      if (res.ok) {
+        saveSession(data)
+        return { success: true, message: 'Face recognized!' }
       }
-    })
-
-    // Threshold of 0.6 is standard for dlib/face-api
-    if (bestMatch.distance < 0.5) {
-      return login(bestMatch.username, null, true) // Pass true for skipPasswordCheck
+      return { success: false, message: 'Face not recognized' }
+    } catch (e) {
+      return { success: false, message: 'Face login error' }
     }
-
-    return { success: false, message: 'Face not recognized' }
   }
 
-  const getVoiceSettings = (username) => {
-    const s = getSettings(username) || session?.settings || {}
+  const getVoiceSettings = () => {
+    const s = session?.settings || {}
     return {
-      rate: s.voiceRate || 1,
-      pitch: s.voicePitch || 1,
-      volume: s.voiceVolume || 1,
-      preferredVoice: s.preferredVoice || '',
+      rate: s.voiceRate ?? 1,
+      pitch: s.voicePitch ?? 1,
+      volume: s.voiceVolume ?? 1,
       language: s.language || 'en-US'
     }
   }
@@ -211,15 +141,16 @@ export function AuthProvider({ children }) {
       value={{
         session,
         isLoggedIn: !!session,
+        loading,
         getCurrentUser: () => session,
+        getToken: () => session?.token,
         register,
         login,
         logout,
         updateSettings,
-        getSettings,
-        getVoiceSettings,
         registerFace,
-        verifyFace
+        verifyFace,
+        getVoiceSettings
       }}
     >
       {children}
@@ -227,12 +158,8 @@ export function AuthProvider({ children }) {
   )
 }
 
-// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const context = useContext(AuthContext)
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider')
-  }
+  if (!context) throw new Error('useAuth must be used within AuthProvider')
   return context
 }
-

@@ -82,20 +82,12 @@ const interpretCommandWithAI = async (text, profile) => {
     }
   }
 
-  // 2. Smart Regex Fallback (If no API key or error)
-  const lower = text.toLowerCase()
-
-  // Mobile Apps
-  if (profile.isMobile) {
-    if (lower.includes('whatsapp')) return { type: 'OPEN_APP', params: { appName: 'whatsapp' } }
-    if (lower.includes('instagram')) return { type: 'OPEN_APP', params: { appName: 'instagram' } }
-    if (lower.includes('camera')) return { type: 'OPEN_APP', params: { appName: 'camera' } }
-  }
-  // Desktop Apps
-  else {
-    if (lower.includes('notepad')) return { type: 'OPEN_APP', params: { appName: 'notepad' } }
-    if (lower.includes('excel')) return { type: 'OPEN_APP', params: { appName: 'excel' } }
-    if (lower.includes('word')) return { type: 'OPEN_APP', params: { appName: 'word' } }
+  // 2. Smart Pattern Fallback (If no API key or error)
+  const lower = text.toLowerCase().trim();
+  
+  const openMatch = lower.match(/(?:open|launch|run|start)\s+(.+)/i);
+  if (openMatch) {
+    return { type: 'OPEN_APP', params: { appName: openMatch[1].trim() } };
   }
 
   // Common
@@ -167,6 +159,8 @@ const TODO_KEY = 'nextbot_todos'
 
 export function useAssistant() {
   const [messages, setMessages] = useState([])
+  const [reminders, setReminders] = useState([])
+  const [tasks, setTasks] = useState([])
   const [inputValue, setInputValue] = useState('')
   const [isListening, setIsListening] = useState(false)
   const [error, setError] = useState(null)
@@ -178,18 +172,51 @@ export function useAssistant() {
   // Get content based on language
   const content = NEXTBOT.content[currentLang] || NEXTBOT.content['EN']
 
-  // --- Persistence Helpers ---
-  const loadReminders = () => {
-    try { return JSON.parse(localStorage.getItem(REM_KEY) || '[]'); }
-    catch { return []; }
-  }
-  const saveReminders = (arr) => localStorage.setItem(REM_KEY, JSON.stringify(arr))
+  // --- API Sync ---
+  const API_BASE = '/api'
+  const { getToken, isLoggedIn } = useAuth()
 
-  const loadTodos = () => {
-    try { return JSON.parse(localStorage.getItem(TODO_KEY) || '[]'); }
-    catch { return []; }
-  }
-  const saveTodos = (arr) => localStorage.setItem(TODO_KEY, JSON.stringify(arr))
+  const apiCall = useCallback(async (endpoint, method = 'GET', body = null) => {
+    const token = getToken()
+    if (!token) return null
+    const options = {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    }
+    if (body) options.body = JSON.stringify(body)
+    try {
+      const res = await fetch(`${API_BASE}${endpoint}`, options);
+      if (res.status === 401 || res.status === 403) return null;
+      return await res.json();
+    } catch (e) {
+      console.error('API Error:', e);
+      return null;
+    }
+  }, [getToken])
+
+  const syncData = useCallback(async () => {
+    if (!isLoggedIn) return
+    const [rems, tasks] = await Promise.all([
+      apiCall('/reminders'),
+      apiCall('/tasks')
+    ])
+    if (rems) {
+       setReminders(rems)
+       rems.forEach(r => {
+          if (!scheduledTimeouts.current[r._id]) scheduleReminder(r)
+       })
+    }
+    if (tasks) {
+       setTasks(tasks)
+    }
+  }, [isLoggedIn, apiCall])
+
+  useEffect(() => {
+    if (isLoggedIn) syncData()
+  }, [isLoggedIn, syncData])
 
   // --- Speech & Output ---
   const speak = useCallback((text, options = {}) => {
@@ -251,34 +278,33 @@ export function useAssistant() {
   }, [])
 
   const scheduleReminder = useCallback((reminder) => {
-    const id = reminder.id
-    const ms = reminder.time - Date.now()
+    const id = reminder._id
+    const targetTime = new Date(reminder.time).getTime()
+    const ms = targetTime - Date.now()
 
-    if (ms <= 0) return
+    if (ms <= 0) {
+       speak(`Reminder: ${reminder.text}`)
+       addMessage(`Reminder: ${reminder.text}`, 'bot')
+       apiCall(`/reminders/${id}`, 'DELETE')
+       return
+    }
 
     if (scheduledTimeouts.current[id]) clearTimeout(scheduledTimeouts.current[id])
 
-    scheduledTimeouts.current[id] = setTimeout(() => {
+    scheduledTimeouts.current[id] = setTimeout(async () => {
       speak(`Reminder: ${reminder.text}`)
       addMessage(`Reminder: ${reminder.text}`, 'bot')
-
-      const current = loadReminders()
-      const updated = current.filter(r => r.id !== id)
-      saveReminders(updated)
-
+      await apiCall(`/reminders/${id}`, 'DELETE')
       delete scheduledTimeouts.current[id]
     }, ms)
-  }, [speak, addMessage])
+  }, [speak, addMessage, apiCall])
 
   useEffect(() => {
-    const rems = loadReminders()
-    rems.forEach(r => scheduleReminder(r))
     const timeouts = scheduledTimeouts.current
-
     return () => {
       Object.values(timeouts).forEach(t => clearTimeout(t))
     }
-  }, [scheduleReminder])
+  }, [])
   /* 
      --- Process Command (Next-Gen AI & System Aware) --- 
   */
@@ -316,7 +342,13 @@ export function useAssistant() {
         const searchResp = `Searching for ${intent.params.query}...`
         speak(searchResp)
         addMessage(searchResp, 'bot', true)
-        setTimeout(() => window.open(`https://www.google.com/search?q=${encodeURIComponent(intent.params.query)}`, '_blank'), 1000)
+        setTimeout(() => {
+           if (isMobile) {
+             window.location.href = `https://www.google.com/search?q=${encodeURIComponent(intent.params.query)}`
+           } else {
+             window.open(`https://www.google.com/search?q=${encodeURIComponent(intent.params.query)}`, '_blank')
+           }
+        }, 1000)
         break;
 
       case 'TIME':
@@ -391,7 +423,7 @@ export function useAssistant() {
     else {
       // Desktop Bridge (Localhost)
       try {
-        fetch('http://localhost:3002/command', {
+        fetch('/command', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ command: appName })
@@ -547,13 +579,39 @@ export function useAssistant() {
 
   const handleClearChat = useCallback(() => setMessages([]), [])
 
+  const deleteReminder = useCallback(async (id) => {
+    await apiCall(`/reminders/${id}`, 'DELETE')
+    setReminders(prev => prev.filter(r => r._id !== id))
+    if (scheduledTimeouts.current[id]) {
+      clearTimeout(scheduledTimeouts.current[id])
+      delete scheduledTimeouts.current[id]
+    }
+  }, [apiCall])
+
+  const deleteTask = useCallback(async (id) => {
+    await apiCall(`/tasks/${id}`, 'DELETE')
+    setTasks(prev => prev.filter(t => t._id !== id))
+  }, [apiCall])
+
+  const toggleTask = useCallback(async (id, done) => {
+    const updated = await apiCall(`/tasks/${id}`, 'PUT', { done })
+    if (updated) {
+       setTasks(prev => prev.map(t => t._id === id ? { ...t, done: updated.done } : t))
+    }
+  }, [apiCall])
+
   return {
     messages,
+    reminders,
+    tasks,
     inputValue,
     setInputValue,
     handleSubmit,
     handleMicClick,
     handleClearChat,
+    deleteReminder,
+    deleteTask,
+    toggleTask,
     isListening,
     error,
     initializeAssistant

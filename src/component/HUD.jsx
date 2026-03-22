@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Activity, Wifi, Cpu, Cloud, MapPin, Mic } from 'lucide-react'
-
-import { motion } from 'framer-motion'
+import { Activity, Wifi, Cpu, Cloud, MapPin, Mic, Bell, ListTodo } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { useAssistant } from '../hooks/useAssistant'
 
 // --- Style Utilities ---
 
@@ -210,10 +210,14 @@ const DigitalClock = () => {
 
 
 const LetsTalkButton = () => {
+    const { initializeAssistant } = useAssistant()
     const [hover, setHover] = useState(false)
     const [isSpeaking, setIsSpeaking] = useState(false)
 
     useEffect(() => {
+        // Initialize if logged in
+        initializeAssistant()
+        
         const handleSpeakStart = () => setIsSpeaking(true)
         const handleSpeakEnd = () => setIsSpeaking(false)
 
@@ -288,6 +292,78 @@ const LetsTalkButton = () => {
 
 // --- Main HUD Layout ---
 
+const RemindersPanel = () => {
+    const { reminders, deleteReminder } = useAssistant()
+
+    return (
+        <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.4 }}>
+            <SciFiPanel title="ACTIVE REMINDERS" className="w-[150px] min-h-[90px] sm:w-[220px] md:w-[240px]">
+                <div className="space-y-2 mt-1 max-h-[120px] overflow-y-auto scrollbar-none">
+                    {reminders.length === 0 ? (
+                        <div className="text-[10px] text-gray-500 italic opacity-50">NO SCHEDULED EVENTS</div>
+                    ) : (
+                        reminders.map(r => (
+                            <div key={r._id} className="group/item flex justify-between items-center border-l-2 border-cyan-500/30 pl-2 py-0.5 hover:border-cyan-400">
+                                <div className="min-w-0">
+                                    <div className="text-[10px] text-white truncate font-medium">{r.text}</div>
+                                    <div className="text-[8px] text-cyan-500/70 font-mono">
+                                        {new Date(r.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </div>
+                                </div>
+                                <button onClick={() => deleteReminder(r._id)} className="opacity-0 group-hover/item:opacity-100 p-1 text-red-500 hover:text-red-400 focus:outline-none">
+                                    <X size={10} />
+                                </button>
+                            </div>
+                        ))
+                    )}
+                </div>
+                <div className="pt-2 mt-2 border-t border-cyan-500/10 flex justify-between text-[8px] text-gray-500">
+                    <span className="flex items-center gap-1"><Bell size={8} /> PERSISTENT</span>
+                    <span>{reminders.length} UNITS</span>
+                </div>
+            </SciFiPanel>
+        </motion.div>
+    )
+}
+
+const TaskPanel = () => {
+    const { tasks, toggleTask } = useAssistant()
+    const activeTasks = tasks.filter(t => !t.done)
+
+    return (
+        <motion.div initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.3 }}>
+            <SciFiPanel title="MISSION TASKS" type="reverse" className="w-[150px] min-h-[100px] sm:w-[220px] md:w-[240px]">
+                <div className="space-y-1.5 mt-1 max-h-[150px] overflow-y-auto scrollbar-none">
+                    {activeTasks.length === 0 ? (
+                        <div className="text-[10px] text-emerald-500/50 italic">ALL OBJECTIVES CLEARED</div>
+                    ) : (
+                        activeTasks.map(t => (
+                            <div key={t._id}
+                                onClick={() => toggleTask(t._id, true)}
+                                className="cursor-pointer group/task flex items-center gap-2 py-1 px-2 bg-white/5 hover:bg-cyan-500/10 rounded transition-colors"
+                            >
+                                <div className="w-1.5 h-1.5 border border-cyan-500 rounded-sm" />
+                                <div className="text-[10px] text-gray-300 group-hover/task:text-cyan-200 transition-colors truncate">{t.text}</div>
+                            </div>
+                        ))
+                    )}
+                </div>
+                <div className="mt-3 flex items-center gap-2 justify-end">
+                    <div className="text-[8px] text-gray-500 font-mono uppercase">Sync Status:</div>
+                    <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                </div>
+            </SciFiPanel>
+        </motion.div>
+    )
+}
+
+const X = ({ size }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+    </svg>
+)
+
 const HUD = () => {
     return (
         <div className="fixed inset-0 pointer-events-none z-40 p-2 sm:p-4 font-sans text-white select-none overflow-hidden">
@@ -295,12 +371,13 @@ const HUD = () => {
             <div className="absolute top-4 left-4 md:top-8 md:left-8 flex flex-col gap-4">
                 <SystemStats />
                 <LocationWeather />
-
+                <RemindersPanel />
             </div >
 
             {/* Top Right Stack */}
             <div className="absolute top-4 right-4 md:top-8 md:right-8 flex flex-col gap-4 items-end">
                 <DigitalClock />
+                <TaskPanel />
             </div>
 
             {/* Bottom Center */}
