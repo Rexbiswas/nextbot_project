@@ -1,28 +1,19 @@
 import React from "react"
-import { Routes, Route } from 'react-router-dom'
 import { AuthProvider } from "./contexts/AuthContext"
 import { LanguageProvider } from "./contexts/LanguageContext"
-import Ui from './component/ui.jsx'
-import AssistantModal from "./component/assistantModal.jsx"
-import "./tailwind-setup.css"
-import "./index.css"
-
-
-import ParticlesBackground from "./component/ParticlesBackground.jsx"
+import DashboardHUD from "./component/Dashboard/DashboardHUD.jsx"
 import StartOverlay from "./component/StartOverlay.jsx"
-
-import HUD from "./component/HUD.jsx"
+import ParticlesBackground from "./component/ParticlesBackground.jsx"
+import "./index.css"
 
 export default function App() {
   return (
-    <div className="app">
+    <div className="bg-[#0b111a] min-h-screen relative overflow-hidden">
       <ParticlesBackground />
       <LanguageProvider>
         <AuthProvider>
           <StartOverlay />
-          <HUD />
-          <Ui />
-          <AssistantModal />
+          <DashboardHUD />
         </AuthProvider>
       </LanguageProvider>
     </div>

@@ -1,91 +1,73 @@
 import { useState } from 'react'
 import FaceAuth from './FaceAuth'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 
 const StartOverlay = () => {
     const [visible, setVisible] = useState(true)
     const [showFaceAuth, setShowFaceAuth] = useState(false)
 
     const handleStart = () => {
-        // Delay slightly for effect or just fade out immediately
         setVisible(false)
-        // Dispatch event to start the assistant after a slight delay matching animation?
-        // Actually, dispatch immediately so background starts up while overlay fades
         window.dispatchEvent(new CustomEvent('start-nextbot'))
     }
 
+    if (!visible) return null;
+
     return (
-        <AnimatePresence>
-            {visible && (
-                <motion.div
-                    initial={{ opacity: 1 }}
-                    exit={{ opacity: 0, scale: 1.1, filter: "blur(10px)" }}
-                    transition={{ duration: 0.8, ease: "easeInOut" }}
-                    className="start-overlay-container fixed inset-0 z-1000 flex flex-col items-center justify-center bg-black/90 backdrop-blur-xl p-4"
-                >
-                    <div className="text-center space-y-6 md:space-y-10">
-                        <div className="relative inline-block">
-                            <div className="absolute inset-0 bg-cyan-500 blur-3xl opacity-20 animate-pulse"></div>
-                        </div>
+        <div className="fixed inset-0 z-2000 flex flex-col items-center justify-center bg-[#0b111a] backdrop-blur-3xl p-6 overflow-hidden">
+            {/* Background glowing rings */}
+            <div className="absolute inset-0 z-[-1] pointer-events-none opacity-20">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] border border-cyan-500 rounded-full blur-3xl animate-pulse" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] border border-cyan-500/30 rounded-full blur-2xl" />
+            </div>
 
-                        <motion.h1
-                            initial={{ y: 20, opacity: 0 }}
-                            animate={{ y: 0, opacity: 1 }}
-                            transition={{ delay: 0.2 }}
-                            className="start-title text-3xl md:text-5xl font-bold text-transparent bg-clip-text bg-linear-to-r from-cyan-400 to-blue-600 font-[Orbitron] tracking-widest"
+            <div className="text-center space-y-12 max-w-xl">
+                 <div className="space-y-4">
+                    <motion.h1 
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="text-6xl font-bold tracking-[0.4em] font-mono uppercase bg-linear-to-r from-cyan-400 to-blue-600 bg-clip-text text-transparent"
+                    >
+                        NEXTBOT
+                    </motion.h1>
+                    <motion.p 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 0.6 }}
+                        transition={{ delay: 0.5 }}
+                        className="text-cyan-400 font-mono text-sm tracking-[0.2em] uppercase"
+                    >
+                        Sentient_Core_Initialized: V4.10_MARS
+                    </motion.p>
+                 </div>
+
+                 <div className="relative flex flex-col items-center">
+                    {!showFaceAuth ? (
+                        <motion.button
+                            whileHover={{ scale: 1.05, letterSpacing: "6px" }}
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => setShowFaceAuth(true)}
+                            className="px-12 py-5 border-2 border-cyan-500/50 bg-cyan-500/5 text-cyan-400 rounded-lg font-bold tracking-[4px] uppercase hover:bg-cyan-500/20 backdrop-blur-md transition-all shadow-[0_0_50px_rgba(0,240,255,0.2)]"
                         >
-                            NEXTBOT
-                        </motion.h1>
-
-                        <motion.p
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ delay: 0.4 }}
-                            className="start-subtitle text-gray-400 text-base md:text-lg tracking-wide"
-                        >
-                            System Initialized. Awaiting Input.
-                        </motion.p>
-
-                        <div className="relative flex flex-col items-center">
-                            {!showFaceAuth ? (
-                                <motion.button
-                                    initial={{ scale: 0.9, opacity: 0 }}
-                                    animate={{ scale: 1, opacity: 1 }}
-                                    transition={{ delay: 0.6 }}
-                                    whileHover={{ scale: 1.05, boxShadow: "0 0 30px rgba(6,182,212,0.3)" }}
-                                    whileTap={{ scale: 0.95 }}
-                                    onClick={() => setShowFaceAuth(true)}
-                                    className="start-btn group relative px-6 py-3 md:px-8 md:py-4 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/50 rounded-full transition-all duration-300"
-                                >
-                                    <span className="text-cyan-300 font-bold tracking-wider text-lg md:text-xl">AUTHENTICATE</span>
-                                    <div className="absolute inset-0 rounded-full ring-2 ring-cyan-500/30 group-hover:ring-cyan-500/60 animate-ping opacity-20"></div>
-                                </motion.button>
-                            ) : (
-                                <motion.div
-                                    initial={{ opacity: 0, scale: 0.9 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                >
-                                    <FaceAuth onAuthenticated={handleStart} mode="login" />
-                                    <div className="mt-4">
-                                        <button
-                                            onClick={handleStart}
-                                            className="text-xs text-gray-500 hover:text-cyan-400 transition-colors uppercase tracking-widest"
-                                        >
-                                            [ Manual Override ]
-                                        </button>
-                                    </div>
-                                </motion.div>
-                            )}
+                            Logon_Sequence
+                        </motion.button>
+                    ) : (
+                        <div className="space-y-6">
+                            <FaceAuth onAuthenticated={handleStart} mode="login" />
+                            <p 
+                                onClick={handleStart} 
+                                className="text-[10px] text-cyan-500/40 cursor-pointer hover:text-cyan-400 uppercase tracking-widest transition-colors"
+                            >
+                                [ Skip_Biometric_Validation ]
+                            </p>
                         </div>
-                    </div>
+                    )}
+                 </div>
+            </div>
 
-                    {/* Visual Decoration */}
-                    <div className="start-footer absolute bottom-10 text-xs text-gray-600 font-mono">
-                        SECURE CONNECTION ESTABLISHED
-                    </div>
-                </motion.div>
-            )}
-        </AnimatePresence>
+            <div className="absolute bottom-10 text-[9px] font-mono text-cyan-500/30 uppercase tracking-[1em]">
+                 Establishing_Secure_Neural_Link...
+            </div>
+        </div>
     )
 }
 

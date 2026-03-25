@@ -11,6 +11,8 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { exec } from 'child_process';
 import { processCommand } from './commandProcessor.js';
+import os from 'os';
+import si from 'systeminformation';
 
 const app = express();
 const PORT = process.env.PORT || 3002;
@@ -200,6 +202,38 @@ app.post('/api/login/face', async (req, res) => {
     res.status(401).json({ error: 'Face not recognized' });
   } catch (error) {
     res.status(500).json({ error: 'Face login failed' });
+  }
+});
+
+// --- System Telemetry (Phase 2, 7) ---
+app.get('/api/system/stats', async (req, res) => {
+  try {
+    // Advanced Telemetry with systeminformation
+    const [cpu, mem, load, disk, net] = await Promise.all([
+      si.currentLoad(),
+      si.mem(),
+      si.fullLoad(),
+      si.fsSize(),
+      si.networkStats()
+    ]);
+
+    res.json({
+        cpu: cpu.currentLoad.toFixed(1),
+        ram: ((mem.active / mem.total) * 100).toFixed(1),
+        load: load.toFixed(1),
+        totalMem: (mem.total / (1024 ** 3)).toFixed(1) + 'GB',
+        freeMem: (mem.free / (1024 ** 3)).toFixed(1) + 'GB',
+        disk: disk[0] ? disk[0].use.toFixed(1) : 0, // Primary drive usage
+        netSpeed: net[0] ? (net[0].rx_sec / 1024 / 1024).toFixed(1) : 0, // MB/s
+        uptime: Math.floor(os.uptime() / 3600) + 'h',
+        platform: os.platform(),
+        arch: os.arch(),
+        hostname: os.hostname(),
+        status: cpu.currentLoad > 80 ? 'CRITICAL_LOAD' : 'OPTIMAL_SYNERGY'
+    });
+  } catch (e) {
+    console.error("Telemetry Error:", e);
+    res.status(500).json({ error: 'Failed to fetch telemetry' });
   }
 });
 
