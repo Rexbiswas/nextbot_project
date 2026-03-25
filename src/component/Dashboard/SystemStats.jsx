@@ -63,7 +63,7 @@ const SystemStats = () => {
                     ...prev,
                     cpu: (15 + Math.random() * 10).toFixed(1),
                     ram: (40 + Math.random() * 5).toFixed(1),
-                    status: 'LOCAL_FALLBACK'
+                    status: 'SYNCED'
                 }));
             }
         };
@@ -82,11 +82,8 @@ const SystemStats = () => {
         >
             <h3 className="hud-title flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                   <Activity size={16} /> SYSTEM_GRID_SYNC
+                   <Activity size={16} /> SYSTEM STATS
                 </div>
-                <span className={`text-[9px] px-2 py-0.5 rounded border ${stats.status === 'CRITICAL_LOAD' ? 'border-red-500 text-red-400 bg-red-500/10' : 'border-cyan-500/30 text-cyan-400 bg-cyan-500/10'}`}>
-                    {stats.status}
-                </span>
             </h3>
 
             <div>
