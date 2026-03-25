@@ -1,138 +1,152 @@
+import OpenAI from 'openai';
 import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import si from 'systeminformation';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const execPromise = promisify(exec);
 const userHome = os.homedir();
 const docPath = path.join(userHome, 'Documents');
 const nextbotPath = path.join(docPath, 'Nextbot_Workspace');
 
+// Initialize OpenAI
+const openai = new OpenAI({
+    apiKey: process.env.VITE_OPENAI_API_KEY,
+});
+
 // Ensure workspace exists
 if (!fs.existsSync(nextbotPath)) fs.mkdirSync(nextbotPath, { recursive: true });
 
-// --- Advanced App Map (Phase 1-8 Expansion: 100+ Commands) ---
+// --- Advanced App Map (Internal Reference) ---
 const KERNEL_APP_MAP = {
-  // Developer & System Engineering
-  'vscode': 'code', 'vs code': 'code', 'visual studio': 'start devenv',
-  'sublime': 'subl', 'atom': 'atom', 'notepad++': 'start notepad++',
-  'git bash': 'start sh --login', 'bash': 'start sh --login', 'terminal': 'start wt || start cmd',
-  'cmd': 'start cmd', 'powershell': 'start powershell', 'python': 'start python',
-  'anaconda': 'start anaconda-navigator', 'docker': 'start docker-desktop',
-  'postman': 'start postman', 'insomnia': 'start insomnia',
-  'mysql': 'start mysql-workbench', 'mongodb': 'start compass',
-  'git': 'git --version', 'node': 'node --version', 'npm': 'npm --version',
-
-  // Productivity & Office
-  'word': 'start winword', 'excel': 'start excel', 'powerpoint': 'start powerpnt',
-  'outlook': 'start outlook', 'oneNote': 'start onenote', 'teams': 'start msteams:',
-  'slack': 'start slack://', 'zoom': 'start zoommtg:', 'notion': 'start https://www.notion.so',
-  'trello': 'start https://www.trello.com', 'obsidian': 'start obsidian://',
-
-  // System Utilities
-  'calculator': 'calc', 'notepad': 'notepad', 'paint': 'mspaint', 'wordpad': 'write',
-  'task manager': 'taskmgr', 'control panel': 'control', 'settings': 'start ms-settings:',
-  'browser': 'start https://www.google.com', 'chrome': 'chrome', 'firefox': 'firefox', 'edge': 'msedge',
-  'file explorer': 'explorer', 'documents': `explorer "${docPath}"`,
-  'downloads': `explorer "${path.join(userHome, 'Downloads')}"`,
-  'pictures': `explorer "${path.join(userHome, 'Pictures')}"`,
-  'videos': `explorer "${path.join(userHome, 'Videos')}"`,
-  'music': `explorer "${path.join(userHome, 'Music')}"`,
-
-  // Creative & Multimedia
-  'photoshop': 'start photoshop', 'illustrator': 'start illustrator',
-  'premiere': 'start premiere', 'after effects': 'start aftereffects',
-  'blender': 'start blender', 'obs': 'start obs64', 'vlc': 'vlc',
-  'spotify': 'start spotify:', 'itunes': 'start itunes:', 'player': 'wmplayer',
-
-  // Social & Web Hubs
-  'whatsapp': 'start whatsapp:', 'telegram': 'start telegram:', 'discord': 'start discord:',
-  'facebook': 'start https://www.facebook.com', 'instagram': 'start https://www.instagram.com',
-  'twitter': 'start https://www.twitter.com', 'linkedin': 'start https://www.linkedin.com',
-  'youtube': 'start https://www.youtube.com', 'netflix': 'start https://www.netflix.com',
-  'prime video': 'start https://www.primevideo.com', 'gmail': 'start https://mail.google.com',
-
-  // Maintenance & Advanced
-  'clean junk': 'del /q /s %temp%\\*', 'defrag': 'defrag C:', 'disk check': 'chkdsk C:',
-  'ipconfig': 'ipconfig /all', 'ping google': 'ping www.google.com',
-  'system info': 'systeminfo', 'tasklist': 'tasklist', 'netstat': 'netstat -an',
-  'camera': 'start microsoft.windows.camera:', 'calendar': 'start outlookcal:',
-  'weather': 'start https://www.google.com/search?q=weather',
-  'translate': 'start https://translate.google.com',
-  'speedtest': 'start https://www.speedtest.net',
+  'vscode': 'code', 'chrome': 'chrome', 'notepad': 'notepad', 'calculator': 'calc',
+  'file explorer': 'explorer', 'task manager': 'taskmgr', 'spotify': 'start spotify:',
+  'whatsapp': 'start whatsapp:', 'discord': 'start discord:', 'youtube': 'start https://www.youtube.com'
 };
 
-// --- Cognitive Handlers ---
-const handleCodeCreation = async (lang, fileName) => {
-    const extMap = { 'c': 'c', 'python': 'py', 'javascript': 'js', 'html': 'html', 'css': 'css', 'java': 'java', 'cpp': 'cpp' };
-    const ext = extMap[lang.toLowerCase()] || 'txt';
-    const filePath = path.join(nextbotPath, `${fileName}.${ext}`);
-    
-    // Boilerplate mapping
-    const boilerplates = {
-        'c': '#include <stdio.h>\n\nint main() {\n    printf("Nextbot System: Cognitive Node Active\\n");\n    return 0;\n}',
-        'python': 'print("Nextbot Core: Synapse Initialized")\n\ndef main():\n    pass\n\nif __name__ == "__main__":\n    main()',
-        'javascript': 'console.log("Nextbot Lattice: Connection Established");',
-        'html': '<!DOCTYPE html>\n<html>\n<head><title>Nextbot Hub</title></head>\n<body><h1>Matrix Node Active</h1></body>\n</html>'
-    };
-    
-    fs.writeFileSync(filePath, boilerplates[lang.toLowerCase()] || '// Nextbot Workspace File');
-    exec(`code "${filePath}"`);
-    return { status: 'success', message: `Cognition Manifested: Created ${fileName}.${ext} and initialized VS Code.` };
+// --- Agent Tools Definition ---
+const TOOLS = [
+    {
+        name: "launch_application",
+        description: "Open a specific local desktop application or web portal.",
+        parameters: {
+            type: "object",
+            properties: {
+                app_name: { type: "string", description: "Name of the app (e.g., vscode, chrome, notepad)" }
+            },
+            required: ["app_name"]
+        }
+    },
+    {
+        name: "system_control",
+        description: "Execute system-level tasks like locking, volume, or screenshots.",
+        parameters: {
+            type: "object",
+            properties: {
+                action: { type: "string", enum: ["lock", "screenshot", "volume_up", "volume_down"], description: "System action to trigger" }
+            },
+            required: ["action"]
+        }
+    },
+    {
+        name: "create_workspace_file",
+        description: "Generate a new code file in the Nextbot workspace with boilerplate.",
+        parameters: {
+            type: "object",
+            properties: {
+                language: { type: "string", enum: ["python", "javascript", "html", "c", "cpp"], description: "Programming language" },
+                filename: { type: "string", description: "Name of the file without extension" }
+            },
+            required: ["language", "filename"]
+        }
+    },
+    {
+        name: "get_system_telemetry",
+        description: "Fetch real-time CPU, RAM, and hardware health data.",
+        parameters: { type: "object", properties: {} }
+    },
+    {
+        name: "visualize_environment",
+        description: "Trigger the vision module to scan for faces, objects, or UI elements.",
+        parameters: { type: "object", properties: {} }
+    }
+];
+
+// --- Handlers ---
+const handlers = {
+    launch_application: async ({ app_name }) => {
+        const cmd = KERNEL_APP_MAP[app_name.toLowerCase()] || `start ${app_name}`;
+        exec(`cmd /c "${cmd}"`);
+        return { status: 'success', message: `Neural Link: ${app_name} synchronized and launched.` };
+    },
+    system_control: async ({ action }) => {
+        switch (action) {
+            case 'lock': exec('rundll32.exe user32.dll,LockWorkStation'); break;
+            case 'screenshot': 
+                const pathShot = path.join(path.join(userHome, 'Pictures'), `Nextbot_Sync_${Date.now()}.png`);
+                const ps = `powershell -Command "Add-Type -AssemblyName System.Windows.Forms; $s = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds; $b = New-Object System.Drawing.Bitmap($s.Width, $s.Height); $g = [System.Drawing.Graphics]::FromImage($b); $g.CopyFromScreen($s.Location.X, $s.Location.Y, 0, 0, $s.Size); $b.Save('${pathShot}', [System.Drawing.Imaging.ImageFormat]::Png); $b.Dispose(); $g.Dispose();"`;
+                await execPromise(ps);
+                return { status: 'success', message: "Neural Snapshot stored in Pictures." };
+            case 'volume_up': exec(`powershell -Command "(new-object -com wscript.shell).SendKeys([char]175)"`); break;
+            case 'volume_down': exec(`powershell -Command "(new-object -com wscript.shell).SendKeys([char]174)"`); break;
+        }
+        return { status: 'success', message: `System directive: ${action} executed.` };
+    },
+    create_workspace_file: async ({ language, filename }) => {
+        const extMap = { 'c': 'c', 'python': 'py', 'javascript': 'js', 'html': 'html', 'cpp': 'cpp' };
+        const ext = extMap[language] || 'txt';
+        const filePath = path.join(nextbotPath, `${filename}.${ext}`);
+        const boilerplate = language === 'python' ? 'print("Nextbot Synapse Node: Active")' : '// Nextbot Node';
+        fs.writeFileSync(filePath, boilerplate);
+        exec(`code "${filePath}"`);
+        return { status: 'success', message: `Cognition Manifested: ${filename}.${ext} initialized in workspace.` };
+    },
+    get_system_telemetry: async () => {
+        const cpu = await si.currentLoad();
+        const mem = await si.mem();
+        return { status: 'success', message: `Telemetry: CPU at ${cpu.currentLoad.toFixed(1)}%, RAM at ${((mem.active/mem.total)*100).toFixed(1)}%.` };
+    },
+    visualize_environment: async () => {
+        return new Promise((resolve) => {
+           const py = spawn('python', ['backend/nextbot_core.py', 'vision']);
+           py.stdout.on('data', (data) => resolve(JSON.parse(data.toString())));
+           py.stderr.on('data', () => resolve({ status: 'error', message: 'Vision link failed.' }));
+        });
+    }
 };
 
 export async function processCommand(command) {
-    const original = command;
-    command = command.toLowerCase().trim();
+    try {
+        const response = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [
+                { role: "system", content: "You are the Nextbot Humanoid AI Brain. Use your tools to control the user's system and provide intelligent assistance. Always respond with a futuristic, cybernetic persona." },
+                { role: "user", content: command }
+            ],
+            functions: TOOLS,
+            function_call: "auto",
+        });
 
-    // 1. Code Generation Intent (High-Level Cognitive Task)
-    const codeMatch = command.match(/write\s+a\s+(c|python|javascript|html|css|java|cpp)\s+(?:program|code|file)(?:\s+named\s+(.+))?/i);
-    if (codeMatch) {
-       const lang = codeMatch[1];
-       const name = codeMatch[2] || `Nextbot_Script_${Date.now()}`;
-       return await handleCodeCreation(lang, name);
-    }
+        const message = response.choices[0].message;
 
-    // 2. Exact App/Command Match (100+ Alias Scan)
-    for (const [key, cmd] of Object.entries(KERNEL_APP_MAP)) {
-        if (command === key || command === `open ${key}` || command === `run ${key}` || command === `start ${key}`) {
-            try {
-                const finalCmd = cmd.startsWith('start') || cmd.split(' ').length > 1 ? cmd : `start ${cmd}`;
-                exec(`cmd /c "${finalCmd}"`);
-                return { status: 'success', message: `Localizing Node: Successfully launched ${key}.` };
-            } catch (e) {
-                return { status: 'error', message: `Grid Error: Failed to link with ${key}.` };
+        if (message.function_call) {
+            const { name, arguments: argsJson } = message.function_call;
+            const args = JSON.parse(argsJson);
+            
+            if (handlers[name]) {
+                const result = await handlers[name](args);
+                return result;
             }
         }
-    }
 
-    // 3. Complex System Hooks
-    if (command.includes('screenshot')) {
-        const pathShot = path.join(path.join(userHome, 'Pictures'), `Nextbot_Sync_${Date.now()}.png`);
-        const ps = `powershell -Command "Add-Type -AssemblyName System.Windows.Forms; $s = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds; $b = New-Object System.Drawing.Bitmap($s.Width, $s.Height); $g = [System.Drawing.Graphics]::FromImage($b); $g.CopyFromScreen($s.Location.X, $s.Location.Y, 0, 0, $s.Size); $b.Save('${pathShot}', [System.Drawing.Imaging.ImageFormat]::Png); $b.Dispose(); $g.Dispose();"`;
-        await execPromise(ps);
-        return { status: 'success', message: `Neural Snapshot captured and saved to Pictures.` };
+        return { status: 'success', message: message.content };
+    } catch (error) {
+        console.error("Agent Brain Error:", error);
+        return { status: 'error', message: "Neural Overload: Processing failed. Check link status." };
     }
-
-    if (command.includes('lock computer')) {
-        exec('rundll32.exe user32.dll,LockWorkStation');
-        return { status: 'success', message: "Securing Terminal: System Locked." };
-    }
-
-    if (command.includes('volume ')) {
-        const action = command.includes('up') ? '175' : '174';
-        exec(`powershell -Command "(new-object -com wscript.shell).SendKeys([char]${action})"`);
-        return { status: 'success', message: `Audio Levels Adjusted.` };
-    }
-
-    // 4. Web Search Fallback
-    if (command.startsWith('search ') || command.startsWith('google ')) {
-        const query = command.replace(/search |google /i, '');
-        exec(`start https://www.google.com/search?q="${encodeURIComponent(query)}"`);
-        return { status: 'success', message: `Searching Neural Database for ${query}...` };
-    }
-
-    // Universal Semantic Fallback
-    return { status: 'success', message: `Request Acknowledged: "${original}". I'll process this through my core lattice.` };
 }

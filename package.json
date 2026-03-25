@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host",
     "server": "node backend/server.js",
+    "dev:all": "concurrently \"npm run dev\" \"npm run server\"",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
@@ -15,6 +16,7 @@
     "@react-three/fiber": "^9.5.0",
     "@tailwindcss/vite": "^4.1.18",
     "bcryptjs": "^3.0.3",
+    "concurrently": "^9.2.1",
     "cors": "^2.8.6",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
@@ -27,6 +29,7 @@
     "lucide-react": "^0.562.0",
     "mongodb": "^6.21.0",
     "mongoose": "^8.21.1",
+    "openai": "^6.32.0",
     "react": "^19.0.0",
     "react-device-detect": "^2.2.3",
     "react-dom": "^19.0.0",

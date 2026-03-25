@@ -188,7 +188,7 @@ const NeuralCore = () => {
 
       {/* 2D HUD Overlays */}
       <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-          <div className="relative w-[550px] h-[550px]">
+          <div className="relative w-full max-w-[min(90vw,550px)] aspect-square">
               {/* Spinning Hexagon Grid Mask Effect */}
               <motion.div 
                 className="absolute inset-0 border border-cyan-500/10 rounded-full"
@@ -204,9 +204,9 @@ const NeuralCore = () => {
               />
 
               {/* Data readouts */}
-              <div className="absolute top-[10%] left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 opacity-60">
-                  <span className="text-[9px] font-mono text-cyan-400 tracking-[3px]">COGNITIVE_LOAD: 24.8%</span>
-                  <div className="w-32 h-1 bg-cyan-900/40 rounded-full overflow-hidden">
+              <div className="absolute top-[8%] lg:top-[10%] left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 opacity-60">
+                  <span className="text-[7px] lg:text-[9px] font-mono text-cyan-400 tracking-[1px] lg:tracking-[3px]">COGNITIVE_LOAD: 24.8%</span>
+                  <div className="w-20 lg:w-32 h-1 bg-cyan-900/40 rounded-full overflow-hidden">
                       <motion.div 
                         className="h-full bg-cyan-400 shadow-[0_0_10px_#00f0ff]"
                         animate={{ width: ["20%", "45%", "20%"] }}
@@ -216,9 +216,9 @@ const NeuralCore = () => {
               </div>
 
               {/* Directional Brackets */}
-              <div className="absolute inset-0 flex items-center justify-between px-4">
-                  <div className="w-1 h-32 border-l border-y border-cyan-500/30 rounded-lg blur-[1px]" />
-                  <div className="w-1 h-32 border-r border-y border-cyan-500/30 rounded-lg blur-[1px]" />
+              <div className="absolute inset-0 flex items-center justify-between px-2 lg:px-4">
+                  <div className="w-px h-20 lg:h-32 border-l border-y border-cyan-500/30 rounded-lg blur-[1px]" />
+                  <div className="w-px h-20 lg:h-32 border-r border-y border-cyan-500/30 rounded-lg blur-[1px]" />
               </div>
           </div>
       </div>

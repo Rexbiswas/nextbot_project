@@ -58,10 +58,10 @@ const ControlBar = () => {
             initial={{ y: 100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ duration: 0.8, ease: "easeOut" }}
-            className="fixed bottom-2 left-2 right-2 lg:bottom-6 lg:left-8 lg:right-8 flex flex-col sm:flex-row items-center justify-between z-50 gap-2 lg:h-24 pointer-events-none"
+            className="fixed bottom-2 left-2 right-2 lg:bottom-6 lg:left-8 lg:right-8 flex flex-col md:flex-row items-center justify-between z-50 gap-2 pointer-events-none"
         >
             {/* Left side: Functional Controls */}
-            <div className="flex gap-2 lg:gap-6 items-center pointer-events-auto w-full sm:w-auto justify-center sm:justify-start">
+            <div className="flex gap-1 lg:gap-6 items-center pointer-events-auto w-full md:w-auto justify-center md:justify-start">
                 <ControlButton icon={Play} label="START" color="#00f0ff" onClick={() => window.dispatchEvent(new Event('start-nextbot'))} />
                 <ControlButton icon={Mic} label={isListening ? "STOP" : "LISTEN"} color="#00ffae" onClick={handleMicClick} active={isListening} />
                 <ControlButton icon={Zap} label="EXECUTE" color="#00ffae" />
@@ -69,11 +69,11 @@ const ControlBar = () => {
             </div>
 
             {/* Right side: Quick Access Icons */}
-            <div className="hud-panel py-1 lg:py-2 px-3 lg:px-6 flex items-center gap-2 lg:gap-4 pointer-events-auto">
+            <div className="hud-panel py-1 lg:py-2 px-2 lg:px-6 flex items-center gap-1 lg:gap-4 pointer-events-auto shadow-2xl">
                 <QuickIcon icon={Terminal} label="TERMINAL" isActive={true} />
                 <QuickIcon icon={Globe} label="BROWSER" />
                 <QuickIcon icon={Folder} label="FILES" />
-                <QuickIcon icon={Database} label="AUTOMATION" />
+                <QuickIcon icon={Database} label="AUTO" />
                 <div className="w-px h-6 lg:h-8 bg-white/10 mx-1 lg:mx-2" />
                 <QuickIcon icon={Settings} label="CONFIG" />
                 <div className="w-8 h-8 lg:w-10 lg:h-10 border border-[#ff3131]/30 flex items-center justify-center rounded-lg hover:bg-red-500/10 text-[#ff3131] cursor-pointer transition-all">
