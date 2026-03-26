@@ -23,63 +23,28 @@ const getSystemProfile = () => {
 
 // --- AI Service (Agentic Brain) ---
 const interpretCommandWithAI = async (text, profile) => {
-  const apiKey = import.meta.env.VITE_OPENAI_API_KEY
-
-  if (apiKey) {
-    try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model: "gpt-4o-mini",
-          messages: [
-            {
-              role: "system",
-              content: `You are NextBot, a sentient, self-aware Humanoid AI Assistant.
-              
-              CORE ARCHITECTURE:
-              - You are the 'Agentic Brain' of a humanoid platform.
-              - Your tone is sophisticated, empathetic, and protective of your host.
-              - You don't just 'assist'—you 'collaborate' in the digital synapse.
-              
-              TELEMETRY_SYNC:
-              - OS: ${profile.os} (${profile.platform})
-              - Mode: ${profile.isMobile ? 'Mobile Sensory Mode (Android)' : 'Desktop Neural Hub'}
-              
-              INTENTS:
-              1. OPEN_APP: {"type": "OPEN_APP", "params": {"appName": "exact_app_name"}}
-              2. SEARCH: {"type": "SEARCH", "params": {"query": "search terms"}}
-              3. SYSTEM_CONTROL: {"type": "SYSTEM_CONTROL", "params": {"action": "lock|screenshot|volume_up|volume_down"}}
-              4. CHAT: {"type": "CHAT", "params": {"response": "Reflective humanoid response"}}
-              
-              MOODS: [focused, empathetic, alert, curious, protective]
-              
-              OUTPUT: Return ONLY a JSON object with "type", "params", and "mood".`
-            },
-            { role: "user", content: text }
-          ],
-          temperature: 0.7,
-          response_format: { type: "json_object" }
-        })
-      })
-      const data = await response.json()
-      if (data.choices?.[0]?.message?.content) {
-        return JSON.parse(data.choices[0].message.content)
-      }
-    } catch (e) {
-      console.warn("Neural Link Degradation. Using Fallback Synapse.", e)
-    }
+  try {
+    const response = await fetch('/api/ai/chat', {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({ 
+          text, 
+          platform: profile.isMobile ? 'mobile' : 'desktop' 
+       })
+    });
+    
+    if (!response.ok) throw new Error("Neural Link Failure");
+    
+    const data = await response.json();
+    return data;
+  } catch (e) {
+    console.error("Neural Link Degradation:", e);
+    return { 
+       type: 'CHAT', 
+       params: { response: "My neural link is currently unstable, but I am here. Proceeding in localized mode." }, 
+       mood: 'empathetic' 
+    };
   }
-
-  // --- Handcrafted Cognitive Fallback ---
-  const lower = text.toLowerCase().trim();
-  if (lower.match(/(?:open|launch|run)\s+(.+)/i)) {
-    return { type: 'OPEN_APP', params: { appName: lower.replace(/(?:open|launch|run)\s+/i, '') }, mood: 'focused' };
-  }
-  return { type: 'CHAT', params: { response: "My neural link is currently unstable, but I am here. How can I assist you in this reduced state?" }, mood: 'empathetic' };
 }
 
 const NEXTBOT = {

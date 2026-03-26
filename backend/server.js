@@ -13,9 +13,17 @@ import { exec } from 'child_process';
 import { processCommand } from './commandProcessor.js';
 import os from 'os';
 import si from 'systeminformation';
+import OpenAI from 'openai';
+import { BrainRouter } from './BrainRouter.js';
+import { processCommand } from './commandProcessor.js';
 
 const app = express();
 const PORT = process.env.PORT || 3002;
+
+// --- Initialize Multi-Model Master Brain ---
+const brain = new BrainRouter({
+  openai: process.env.VITE_OPENAI_API_KEY
+});
 
 // --- Security & Middleware ---
 app.use(helmet());
@@ -126,8 +134,31 @@ const verifyToken = (req, res, next) => {
 
 // --- Routes ---
 
+// --- Core AI Brain (Proxied Orchestrator) ---
+app.post('/api/ai/chat', async (req, res) => {
+  const { text, platform } = req.body;
+  
+  try {
+     const result = await brain.process(text, platform);
+     
+     if (result.type === 'AGENT_TASK') {
+        const taskResult = await processCommand(result.params.task || text);
+        result.params.response = (result.params.response || '') + " " + taskResult.message;
+     }
+
+     res.json(result);
+  } catch (error) {
+     console.error("!! Brain Error:", error.message);
+     res.status(200).json({ 
+       type: 'CHAT', 
+       params: { response: "Syncing with cloud brain... proceeding in local mode for now." },
+       mood: 'alert'
+     });
+  }
+});
+
 // 1. Health Check
-app.get('/', (req, res) => res.send({ status: 'NextBot Server Online', version: '1.0.0' }));
+app.get('/', (req, res) => res.send({ status: 'NextBot Server Online', version: '2.0.0_ORCHESTRATOR' }));
 
 // 2. Auth: Register
 app.post('/api/register', async (req, res) => {
